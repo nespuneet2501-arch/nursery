@@ -1,0 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700;805&family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Poppins", "Noto Sans Devanagari", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Noto Sans Devanagari", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Base style resets and customizations */
+html, body {
+  font-family: var(--font-sans);
+  background-color: #f7f9f6;
+  color: #1e293b;
+  margin: 0;
+  padding: 0;
+  scroll-behavior: smooth;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* HD High-class floating premium letter & glow animation for logo */
+@keyframes high-class-shimmer {
+  0% {
+    background-position: 0% 50%;
+    filter: drop-shadow(0 0 2px rgba(0, 255, 0, 0.4));
+  }
+  50% {
+    background-position: 100% 50%;
+    filter: drop-shadow(0 0 10px rgba(0, 255, 51, 0.8));
+    letter-spacing: 0.05em;
+  }
+  100% {
+    background-position: 0% 50%;
+    filter: drop-shadow(0 0 2px rgba(0, 255, 0, 0.4));
+  }
+}
+
+@keyframes logo-float {
+  0% {
+    transform: translateY(0px) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translateY(-4px) rotate(3deg) scale(1.02);
+  }
+  50% {
+    transform: translateY(0px) rotate(0deg) scale(1);
+  }
+  75% {
+    transform: translateY(3px) rotate(-3deg) scale(0.98);
+  }
+  100% {
+    transform: translateY(0px) rotate(0deg) scale(1);
+  }
+}
+
+.logo-animate {
+  animation: logo-float 6s ease-in-out infinite;
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.logo-animate:hover {
+  transform: scale(1.18) rotate(15deg) !important;
+  filter: drop-shadow(0 0 18px #00FF33);
+}
+
+.text-high-class-animation {
+  background: linear-gradient(
+    to right,
+    #ffffff 20%,
+    #00FF00 40%,
+    #84cc16 60%,
+    #ffffff 80%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: high-class-shimmer 4s ease-in-out infinite;
+  display: inline-block;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.text-high-class-animation:hover {
+  letter-spacing: 0.1em;
+  filter: drop-shadow(0 0 15px rgba(0, 255, 51, 1));
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+

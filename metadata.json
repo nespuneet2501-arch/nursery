@@ -1,0 +1,6 @@
+{
+  "name": "PlantAdda",
+  "description": "A full-stack, nature-inspired online nursery marketplace for fruits, flowers, seeds, and AMC garden care, with integrated vendor registries, admin coordination, and AI plant care & recognition.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
