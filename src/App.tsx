@@ -155,7 +155,16 @@ export default function App() {
   const [vendorRegEmail, setVendorRegEmail] = useState("");
   const [vendorRegPhone, setVendorRegPhone] = useState("");
   const [vendorRegAddress, setVendorRegAddress] = useState("");
-  const [activeVendorSession, setActiveVendorSession] = useState<Vendor | null>(null);
+  const [activeVendorSession, setActiveVendorSession] = useState<Vendor | null>(() => {
+    try {
+      const saved = localStorage.getItem("vendor_session");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [vendorTabMode, setVendorTabMode] = useState<"login" | "register">("login");
+  const [vendorLoginEmail, setVendorLoginEmail] = useState("");
   
   // Vendor Inventory Add state
   const [newPlantName, setNewPlantName] = useState("");
@@ -174,7 +183,34 @@ export default function App() {
   const [adminCommissionRate, setAdminCommissionRate] = useState("12");
 
   // Three-tone Green Theme Selection Control
-  const [greenTheme, setGreenTheme] = useState<"parrot" | "bottle" | "dark">("dark");
+  const [greenTheme, setGreenTheme] = useState<"parrot" | "bottle" | "dark" | "green">("bottle");
+
+  // Custom added states for photographs & database synchronization
+  const [vendorRegPhoto, setVendorRegPhoto] = useState("");
+
+  // Customer Account management states
+  const [customerRegName, setCustomerRegName] = useState("");
+  const [customerRegEmail, setCustomerRegEmail] = useState("");
+  const [customerRegPhone, setCustomerRegPhone] = useState("");
+  const [customerRegAddress, setCustomerRegAddress] = useState("");
+  const [customerRegPhoto, setCustomerRegPhoto] = useState("");
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [customerTabMode, setCustomerTabMode] = useState<"login" | "register">("login");
+  const [activeCustomerSession, setActiveCustomerSession] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem("customer_session");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Admin Custom Authentication variables
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {
+    return localStorage.getItem("admin_logged_in") === "true";
+  });
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
 
   // Database Integration & Promo Banner States
   const [promoBanner, setPromoBanner] = useState<{ imageUrl: string; title: string; isActive: boolean; newsText?: string } | null>({
@@ -662,6 +698,7 @@ export default function App() {
   useEffect(() => {
     fetchPlants();
     fetchVendors();
+    fetchCustomers();
     fetchOrders();
     fetchAMC();
     fetchDeliverySettings();
@@ -669,6 +706,91 @@ export default function App() {
     fetchDbConnectionsData();
     fetchCategoryCovers();
   }, [currentUser.role]); // Reload list when session switches roles
+
+  // Auto pre-fill checkout parameters when customer session logs in or updates
+  useEffect(() => {
+    if (activeCustomerSession) {
+      setCheckoutName(activeCustomerSession.name);
+      setCheckoutPhone(activeCustomerSession.phone);
+      setCheckoutAddress(activeCustomerSession.address);
+    }
+  }, [activeCustomerSession]);
+
+  const fetchCustomers = async () => {
+    try {
+      const res = await fetch("/api/customers");
+      const data = await res.json();
+      setCustomers(data || []);
+    } catch (e) {
+      console.error("Error loading customers", e);
+    }
+  };
+
+  const handleRegisterCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/customers/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: customerRegName,
+          email: customerRegEmail,
+          phone: customerRegPhone,
+          address: customerRegAddress,
+          photograph: customerRegPhoto
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert("🌱 Customer registered successfully! Your profile is saved in the database.");
+        localStorage.setItem("customer_session", JSON.stringify(data));
+        setActiveCustomerSession(data || null);
+        setCustomerRegName("");
+        setCustomerRegEmail("");
+        setCustomerRegPhone("");
+        setCustomerRegAddress("");
+        setCustomerRegPhoto("");
+        fetchCustomers();
+      } else {
+        alert("Customer registration failed: " + data.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error registering customer profile.");
+    }
+  };
+
+  const handleCustomerLogin = (customer: any) => {
+    localStorage.setItem("customer_session", JSON.stringify(customer));
+    setActiveCustomerSession(customer);
+    alert(`👋 Welcome back, ${customer.name}! Synchronized your database profile.`);
+  };
+
+  const handleCustomerLogout = () => {
+    localStorage.removeItem("customer_session");
+    setActiveCustomerSession(null);
+    setCheckoutName("Anonymous Shopping Guest");
+    setCheckoutPhone("+91 98888 77777");
+    setCheckoutAddress("Sector 15, Gurugram, India");
+    alert("Returned to standard anonymous Guest checkout mode.");
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, setPhotoState: (val: string) => void) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("Image is too large! Please choose an image smaller than 2MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          setPhotoState(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const fetchPlants = async (overrideRole?: string) => {
     try {
@@ -688,9 +810,23 @@ export default function App() {
       const res = await fetch("/api/vendors");
       const data = await res.json();
       setVendors(data);
-      // Auto-set vendor session for the current simulated active role
+      // Auto-set vendor session using stored session or database defaults
+      const saved = localStorage.getItem("vendor_session");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          const latestInfo = data.find((v: Vendor) => v.id === parsed.id);
+          if (latestInfo) {
+            setActiveVendorSession(latestInfo);
+            localStorage.setItem("vendor_session", JSON.stringify(latestInfo));
+            return;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
       const approved = data.find((v: Vendor) => v.status === "approved");
-      if (approved && !activeVendorSession) {
+      if (approved && !activeVendorSession && !localStorage.getItem("vendor_logout_flag")) {
         setActiveVendorSession(approved);
       }
     } catch (e) {
@@ -1009,13 +1145,22 @@ export default function App() {
           nurseryName: vendorRegNursery,
           contactEmail: vendorRegEmail,
           contactPhone: vendorRegPhone,
-          address: vendorRegAddress
+          address: vendorRegAddress,
+          photograph: vendorRegPhoto
         })
       });
 
       const data = await res.json();
       if (res.ok) {
         alert("🌿 Nursery submitted successfully! Your registry is currently 'pending' waiting for Admin inspection in the Admin tab.");
+        localStorage.removeItem("vendor_logout_flag");
+        localStorage.setItem("vendor_session", JSON.stringify(data));
+        setVendorRegName("");
+        setVendorRegNursery("");
+        setVendorRegEmail("");
+        setVendorRegPhone("");
+        setVendorRegAddress("");
+        setVendorRegPhoto("");
         fetchVendors();
         setActiveVendorSession(data);
       } else {
@@ -1024,6 +1169,43 @@ export default function App() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  // Vendor Login API trigger
+  const handleVendorLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vendorLoginEmail) {
+      alert("Please enter your registered contact email address.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/vendors/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactEmail: vendorLoginEmail })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`🌿 Welcome back to PlantAdda, ${data.nurseryName}! Switched to your live workstation.`);
+        localStorage.removeItem("vendor_logout_flag");
+        localStorage.setItem("vendor_session", JSON.stringify(data));
+        setActiveVendorSession(data);
+        setVendorLoginEmail("");
+      } else {
+        alert("Login failed: " + data.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error logging in.");
+    }
+  };
+
+  // Vendor Logout
+  const handleVendorLogout = () => {
+    localStorage.setItem("vendor_logout_flag", "true");
+    localStorage.removeItem("vendor_session");
+    setActiveVendorSession(null);
+    alert("Logged out from the nursery session.");
   };
 
   // Vendor Adds New Plant Image Link Or Mock
@@ -1352,7 +1534,7 @@ export default function App() {
           .text-emerald-800 { color: #111827 !important; } /* Stark Readable Charcoal */
           .text-emerald-700 { color: #008000 !important; } /* Solid Dark Emerald for extreme text contrast on light BG */
           .text-emerald-600 { color: #00991f !important; } /* Highly Visible Brand Green Font */
-          .text-emerald-500 { color: #00cc00 !important; } 
+          .text-emerald-505 { color: #00cc00 !important; } 
           .text-emerald-300 { color: #00FF00 !important; } /* Electric Accent (on dark bg) */
           .text-emerald-250 { color: #ffffff !important; } /* True White contrast */
           .text-emerald-200 { color: #ffffff !important; } 
@@ -1369,6 +1551,44 @@ export default function App() {
           .hover\\:bg-emerald-800:hover { background-color: #121214 !important; }
           .hover\\:bg-emerald-400:hover { background-color: #00FF00 !important; }
           .accent-emerald-700 { accent-color: #00FF00 !important; }
+        ` }} />
+      );
+    }
+    if (greenTheme === "green") {
+      return (
+        <style dangerouslySetInnerHTML={{ __html: `
+          /* Pure Fresh Green / Countryside Garden Theme Overrides */
+          .bg-emerald-950 { background-color: #1a4314 !important; }
+          .bg-emerald-900 { background-color: #245e1a !important; }
+          .bg-emerald-800 { background-color: #2e7d32 !important; }
+          .bg-emerald-700 { background-color: #4caf50 !important; }
+          .bg-emerald-600 { background-color: #66bb6a !important; }
+          .bg-emerald-500 { background-color: #81c784 !important; }
+          .bg-emerald-100 { background-color: #e8f5e9 !important; }
+          .bg-emerald-50 { background-color: #f1f8f3 !important; }
+          
+          .text-emerald-950 { color: #1a4314 !important; }
+          .text-emerald-900 { color: #245e1a !important; }
+          .text-emerald-800 { color: #2e7d32 !important; }
+          .text-emerald-700 { color: #2e7d32 !important; }
+          .text-emerald-600 { color: #388e3c !important; }
+          .text-emerald-500 { color: #4caf50 !important; }
+          .text-emerald-300 { color: #81c784 !important; }
+          .text-emerald-250 { color: #ffffff !important; }
+          .text-emerald-200 { color: #ffffff !important; }
+          .text-emerald-100 { color: #ffffff !important; }
+          
+          .border-emerald-900 { border-color: #245e1a !important; }
+          .border-emerald-800 { border-color: #2e7d32 !important; }
+          .border-emerald-600 { border-color: #4caf50 !important; }
+          .border-emerald-100 { border-color: #c8e6c9 !important; }
+          .border-emerald-200 { border-color: #4caf50 !important; }
+
+          .hover\\:bg-emerald-950:hover { background-color: #1a4314 !important; }
+          .hover\\:bg-emerald-900:hover { background-color: #245e1a !important; }
+          .hover\\:bg-emerald-800:hover { background-color: #2e7d32 !important; }
+          .hover\\:bg-emerald-400:hover { background-color: #66bb6a !important; }
+          .accent-emerald-700 { accent-color: #2e7d32 !important; }
         ` }} />
       );
     }
@@ -1545,81 +1765,95 @@ export default function App() {
           </div>
 
           {/* Quick Mock Role Switcher for previewer flow sandbox testing */}
-          <div className="bg-emerald-950 px-3 py-1.5 rounded-2xl flex flex-wrap items-center gap-2 border border-emerald-800 text-[11px]">
-            <span className="text-emerald-400 font-mono flex items-center gap-1">
-              <Activity className="w-3.5 h-3.5" /> Simulation Sandbox:
-            </span>
-            <div className="flex gap-1.5">
-              <button 
-                onClick={() => {
-                  setCurrentTab("marketplace");
-                  setCurrentUser({ email: "customer@gmail.com", name: "Suresh Gupta", role: "customer" });
-                  fetchPlants("customer");
-                }} 
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  currentUser.role === "customer" 
-                    ? "bg-emerald-700 text-white shadow-sm" 
-                    : "text-emerald-300 hover:bg-emerald-900"
-                }`}
-              >
-                Customer Portal 🛒
-              </button>
-              <button 
-                onClick={() => {
-                  setCurrentTab("vendor");
-                  setCurrentUser({ email: "vendor@greenwood.com", name: "Rajesh Kumar", role: "vendor" });
-                  fetchPlants("vendor");
-                }} 
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  currentUser.role === "vendor" 
-                    ? "bg-emerald-700 text-white shadow-sm" 
-                    : "text-emerald-300 hover:bg-emerald-900"
-                }`}
-              >
-                Vendor Hub 🏪
-              </button>
-              <button 
-                onClick={() => {
-                  setCurrentTab("admin");
-                  setCurrentUser({ email: "ceo@plantadda.com", name: "PlantAdda CEO", role: "admin" });
-                  fetchPlants("admin");
-                }} 
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  currentUser.role === "admin" 
-                    ? "bg-emerald-700 text-white shadow-sm" 
-                    : "text-emerald-300 hover:bg-emerald-900"
-                }`}
-              >
-                Admin Panel 👤
-              </button>
-            </div>
-
-            <div className="h-4 w-[1px] bg-emerald-800 hidden md:block"></div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="text-emerald-400 font-mono">Theme:</span>
-              <div className="flex bg-emerald-900/50 p-0.5 rounded-lg border border-emerald-800/80">
+          <details className="bg-emerald-950/40 border border-emerald-800/80 rounded-2xl text-[11px] max-w-full overflow-hidden transition-all duration-300">
+            <summary className="px-3.5 py-1.5 font-display font-medium text-emerald-300 cursor-pointer flex items-center justify-between gap-2 select-none hover:bg-emerald-950/60">
+              <span className="flex items-center gap-1.5 font-bold">
+                🛠️ {t("Control Console & Simulators", "कंट्रोल कंसोल और सिमुलेटर")}
+              </span>
+              <span className="text-[9px] text-zinc-300 font-normal">({currentUser.role.toUpperCase()} PORTAL) Click to toggle options ↗</span>
+            </summary>
+            <div className="p-3 bg-emerald-900 border-t border-emerald-800/60 flex flex-wrap items-center gap-3">
+              <span className="text-emerald-400 font-mono flex items-center gap-1">
+                <Activity className="w-3 h-3" /> simulation roles:
+              </span>
+              <div className="flex gap-1 flex-wrap">
                 <button 
-                  onClick={() => setGreenTheme("parrot")} 
-                  className={`px-2 py-0.5 rounded text-[10px] transition-all ${greenTheme === "parrot" ? "bg-emerald-600 text-white font-bold" : "text-emerald-300 hover:text-white"}`}
+                  onClick={() => {
+                    setCurrentTab("marketplace");
+                    setCurrentUser({ email: "customer@gmail.com", name: "Suresh Gupta", role: "customer" });
+                    fetchPlants("customer");
+                  }} 
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    currentUser.role === "customer" 
+                      ? "bg-emerald-600 text-white shadow-sm" 
+                      : "text-emerald-300 hover:bg-emerald-800/80 bg-emerald-950/30"
+                  }`}
                 >
-                  🌱 Parrot
+                  Purchase Plants 🛒
                 </button>
                 <button 
-                  onClick={() => setGreenTheme("bottle")} 
-                  className={`px-2 py-0.5 rounded text-[10px] transition-all ${greenTheme === "bottle" ? "bg-emerald-600 text-white" : "text-emerald-300 hover:text-white"}`}
+                  onClick={() => {
+                    setCurrentTab("vendor");
+                    setCurrentUser({ email: "vendor@greenwood.com", name: "Rajesh Kumar", role: "vendor" });
+                    fetchPlants("vendor");
+                  }} 
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    currentUser.role === "vendor" 
+                      ? "bg-emerald-600 text-white shadow-sm" 
+                      : "text-emerald-300 hover:bg-emerald-800/80 bg-emerald-950/30"
+                  }`}
                 >
-                  🌿 Bottle
+                  Register Your Nursery 🏪
                 </button>
                 <button 
-                  onClick={() => setGreenTheme("dark")} 
-                  className={`px-2 py-0.5 rounded text-[10px] transition-all ${greenTheme === "dark" ? "bg-emerald-600 text-white" : "text-emerald-300 hover:text-white"}`}
+                  onClick={() => {
+                    setCurrentTab("admin");
+                    setCurrentUser({ email: "ceo@plantadda.com", name: "PlantAdda CEO", role: "admin" });
+                    fetchPlants("admin");
+                  }} 
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    currentUser.role === "admin" 
+                      ? "bg-emerald-600 text-white shadow-sm" 
+                      : "text-emerald-300 hover:bg-emerald-800/80 bg-emerald-950/30"
+                  }`}
                 >
-                  🌳 Dark
+                  Admin Hub 👤
                 </button>
               </div>
+
+              <div className="h-4 w-[1px] bg-emerald-800 shrink-0 hidden md:block"></div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-emerald-400 font-mono">Theme:</span>
+                <div className="flex bg-emerald-950/60 p-0.5 rounded-lg border border-emerald-850">
+                  <button 
+                    onClick={() => setGreenTheme("parrot")} 
+                    className={`px-2 py-0.5 rounded text-[10px] transition-all cursor-pointer ${greenTheme === "parrot" ? "bg-emerald-600 text-white font-bold" : "text-emerald-300 hover:text-white"}`}
+                  >
+                    🌱 Parrot
+                  </button>
+                  <button 
+                    onClick={() => setGreenTheme("bottle")} 
+                    className={`px-2 py-0.5 rounded text-[10px] transition-all cursor-pointer ${greenTheme === "bottle" ? "bg-emerald-600 text-white font-bold" : "text-emerald-300 hover:text-white"}`}
+                  >
+                    🌿 Bottle
+                  </button>
+                  <button 
+                    onClick={() => setGreenTheme("green")} 
+                    className={`px-2 py-0.5 rounded text-[10px] transition-all cursor-pointer ${greenTheme === "green" ? "bg-emerald-600 text-white font-bold" : "text-emerald-300 hover:text-white"}`}
+                  >
+                    🍃 Green
+                  </button>
+                  <button 
+                    onClick={() => setGreenTheme("dark")} 
+                    className={`px-2 py-0.5 rounded text-[10px] transition-all cursor-pointer ${greenTheme === "dark" ? "bg-emerald-600 text-white font-bold" : "text-emerald-300 hover:text-white"}`}
+                  >
+                    🌳 Dark
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
+          </details>
 
           {/* User state and Cart/Wishlist summary */}
           <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
@@ -1701,7 +1935,7 @@ export default function App() {
                 : "bg-slate-50 text-slate-600 hover:bg-slate-100"
             }`}
           >
-            🌱 {t("Plant Marketplace", "पौधा बाज़ार")}
+            🌱 {t("Purchase Plants", "पौधा बाज़ार")}
           </button>
           
           <button 
@@ -1726,18 +1960,16 @@ export default function App() {
             🌤️ {t("Botanical AI Scanner", "वनस्पति AI स्कैनर")}
           </button>
 
-          {currentUser.role === "vendor" && (
-            <button 
-              onClick={() => setCurrentTab("vendor")} 
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all shrink-0 flex items-center gap-2 ${
-                currentTab === "vendor" 
-                  ? "bg-emerald-800 text-white shadow-sm" 
-                  : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              🏪 {t("Vendor Hub", "विक्रेता केंद्र")}
-            </button>
-          )}
+          <button 
+            onClick={() => setCurrentTab("vendor")} 
+            className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all shrink-0 flex items-center gap-2 ${
+              currentTab === "vendor" 
+                ? "bg-emerald-800 text-white shadow-sm" 
+                : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            🏪 {t("Register Your Nursery", "नर्सरी पंजीकृत करें")}
+          </button>
 
           {currentUser.role === "admin" && (
             <button 
@@ -1797,6 +2029,203 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* Customer Account & Registry Panel from DB */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-150 shadow-sm text-left">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="font-display font-bold text-base text-slate-900 flex items-center gap-2">
+                    👤 {t("Customer Account Panel", "ग्राहक खाता पैनल")}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Register yourself with a photograph, or switch/login below to save details in the database. Shop with a custom account, or checkout as an anonymous guest.
+                  </p>
+                </div>
+                
+                {activeCustomerSession && (
+                  <button
+                    onClick={handleCustomerLogout}
+                    className="text-[10px] bg-rose-50 border border-rose-250 text-rose-700 hover:bg-rose-100 px-3.5 py-1.5 rounded-xl font-bold transition-all shadow-xs shrink-0 cursor-pointer"
+                  >
+                    🚪 Log Out / Back to Guest Mode
+                  </button>
+                )}
+              </div>
+
+              {!activeCustomerSession ? (
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-12 gap-6">
+                  {/* Selector: login or register */}
+                  <div className="md:col-span-4 space-y-3">
+                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                      <button
+                        onClick={() => setCustomerTabMode("login")}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                          customerTabMode === "login" ? "bg-white text-emerald-800 shadow-xs" : "text-slate-400 hover:text-slate-700"
+                        }`}
+                      >
+                        🔐 Log In Selection
+                      </button>
+                      <button
+                        onClick={() => setCustomerTabMode("register")}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                          customerTabMode === "register" ? "bg-white text-emerald-800 shadow-xs" : "text-slate-400 hover:text-slate-700"
+                        }`}
+                      >
+                        📋 Register Profile
+                      </button>
+                    </div>
+
+                    {customerTabMode === "login" ? (
+                      <div className="space-y-2 text-xs">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Choose Registered Profile:</label>
+                        {customers.length === 0 ? (
+                          <p className="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-lg border border-dashed border-slate-200">
+                            No customer directories found in the database. Go ahead and Register/Create the first one!
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
+                            {customers.map((c) => (
+                              <button
+                                key={c.id}
+                                onClick={() => handleCustomerLogin(c)}
+                                className="flex items-center gap-3 w-full bg-slate-50 hover:bg-emerald-50 border border-slate-200 rounded-xl p-2 transition-all text-left cursor-pointer"
+                              >
+                                <div className="w-8 h-8 rounded-full border border-slate-300 bg-emerald-100 flex items-center justify-center overflow-hidden shrink-0">
+                                  {c.photograph ? (
+                                    <img src={c.photograph} alt={c.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <span className="font-bold text-[10px] text-emerald-800">{c.name ? c.name[0]?.toUpperCase() : "?"}</span>
+                                  )}
+                                </div>
+                                <div className="truncate">
+                                  <p className="font-bold text-slate-800 text-[11px] leading-tight">{c.name}</p>
+                                  <p className="text-[10px] text-slate-500 truncate leading-normal">{c.email}</p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-500 leading-relaxed bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                        Fill your contact parameters and upload your physical portrait block on the right. Your digital registry card is initialized in the database automatically.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Forms Area */}
+                  <div className="md:col-span-8">
+                    {customerTabMode === "login" ? (
+                      <div className="bg-slate-50/50 border border-slate-200/60 p-4 rounded-2xl flex flex-col justify-center items-center text-center space-y-2 h-full min-h-[160px]">
+                        <span className="text-2xl">🌱</span>
+                        <h4 className="font-display font-semibold text-slate-800 text-xs">Aesthetic Guest Shopping Mode Active</h4>
+                        <p className="text-[11px] text-slate-400 max-w-sm">
+                          You can shop and place orders cleanly without registration. To test database persistence, select a client above or choose "Register Profile".
+                        </p>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleRegisterCustomer} className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-500">Full Name</label>
+                            <input
+                              type="text"
+                              required
+                              value={customerRegName}
+                              onChange={(e) => setCustomerRegName(e.target.value)}
+                              placeholder="e.g. Suresh Gupta"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-emerald-600"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-500">Email Address</label>
+                            <input
+                              type="email"
+                              required
+                              value={customerRegEmail}
+                              onChange={(e) => setCustomerRegEmail(e.target.value)}
+                              placeholder="e.g. suresh@gmail.com"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-emerald-600"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-500">Phone</label>
+                            <input
+                              type="text"
+                              required
+                              value={customerRegPhone}
+                              onChange={(e) => setCustomerRegPhone(e.target.value)}
+                              placeholder="e.g. +91 98888 77777"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-emerald-600"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-500">Address</label>
+                            <input
+                              type="text"
+                              required
+                              value={customerRegAddress}
+                              onChange={(e) => setCustomerRegAddress(e.target.value)}
+                              placeholder="e.g. Sector 56, Gurugram"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-emerald-600"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-500 block">Upload Portrait Photograph (Saved in DB)</label>
+                          <div className="flex items-center gap-4 bg-white p-2 rounded-xl border border-slate-200">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handlePhotoUpload(e, setCustomerRegPhoto)}
+                              className="text-xs text-slate-500 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-emerald-55 file:text-emerald-800 hover:file:bg-emerald-100 cursor-pointer w-full"
+                            />
+                            {customerRegPhoto && (
+                              <img src={customerRegPhoto} alt="Portrait preview" className="w-12 h-12 rounded-lg object-cover border border-slate-250 shadow-xs shrink-0" />
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="w-full bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-[11px] py-2 rounded-xl transition-all shadow-xs cursor-pointer"
+                        >
+                          📋 Register and Auto-login Customer
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 bg-emerald-50/50 p-4 border border-emerald-100 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-4 text-left">
+                    <div className="w-14 h-14 rounded-full border border-emerald-300 bg-emerald-100 flex items-center justify-center overflow-hidden shrink-0 shadow-md">
+                      {activeCustomerSession.photograph ? (
+                        <img src={activeCustomerSession.photograph} alt={activeCustomerSession.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="font-black text-emerald-855 text-lg">{activeCustomerSession.name ? activeCustomerSession.name[0]?.toUpperCase() : "?"}</span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="bg-emerald-800 text-white text-[8px] font-black tracking-widest uppercase px-2 py-0.5 rounded-full inline-block">Registered Member</span>
+                      <h4 className="font-display font-black text-slate-800 text-[15px] leading-tight mt-0.5">{activeCustomerSession.name}</h4>
+                      <p className="text-[11px] text-slate-500 leading-normal flex flex-wrap gap-x-3 gap-y-0.5">
+                        <span>✉ {activeCustomerSession.email}</span>
+                        <span>•</span>
+                        <span>📞 {activeCustomerSession.phone}</span>
+                        <span>•</span>
+                        <span>📍 {activeCustomerSession.address}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="bg-white border border-emerald-200 px-4 py-2 rounded-xl text-center shadow-xs">
+                    <p className="text-[9px] font-black text-emerald-800 uppercase tracking-widest font-mono">⚡ Auto-fill Checkout Active</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Checkout forms are filled automatically using your verified profile details.</p>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Quick Live Tracking Area if tracking id exists */}
             {orders.length > 0 && orders.some(o => o.customerEmail === currentUser.email) && (
@@ -2020,6 +2449,7 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {filteredPlants.map((plant) => {
                     const discountedPrice = Math.round(plant.price * (1 - plant.discount / 100));
+                    const associatedVendor = vendors.find(v => v.id === plant.vendorId);
                     return (
                       <div 
                         key={plant.id} 
@@ -2108,9 +2538,20 @@ export default function App() {
                               )}
                             </div>
 
-                            <p className="text-[10px] text-emerald-600 font-mono mt-1 flex items-center gap-1">
-                              <CheckCircle className="w-3 h-3" /> Fulfillable via PlantAdda Local Network
-                            </p>
+                            {associatedVendor ? (
+                              <div className="bg-emerald-50/50 p-2.5 border border-emerald-100 rounded-2xl mt-1.5 text-left space-y-0.5">
+                                <p className="text-[10px] font-bold text-slate-800 flex items-center gap-1">
+                                  🏡 Nursery: {associatedVendor.nurseryName}
+                                </p>
+                                <p className="text-[9px] text-slate-500 font-medium truncate">
+                                  📍 {associatedVendor.address}
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-emerald-600 font-mono mt-1 flex items-center gap-1">
+                                <CheckCircle className="w-3 h-3" /> Fulfillable via PlantAdda Local Network
+                              </p>
+                            )}
                           </div>
                         </div>
 
@@ -2449,21 +2890,178 @@ export default function App() {
                   <p className="text-xs text-slate-500 mt-1">Manage local inventory levels under the cohesive PlantAdda brand layer.</p>
                 </div>
 
-                <div className="bg-emerald-50 px-4 py-2.5 rounded-2xl flex items-center gap-3">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <div className="text-xs">
-                    <p className="text-slate-500">Connected Station Partner:</p>
-                    <p className="font-bold text-emerald-800 text-sm">
-                      {activeVendorSession ? activeVendorSession.nurseryName : "Anonymous Registree"}
-                    </p>
+                <div className="bg-emerald-50 px-4 py-2.5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <div className="text-xs text-left">
+                      <p className="text-slate-500">Connected Station Partner:</p>
+                      <p className="font-bold text-emerald-800 text-sm">
+                        {activeVendorSession ? activeVendorSession.nurseryName : "Anonymous Registree"}
+                      </p>
+                    </div>
                   </div>
+                  {activeVendorSession && (
+                    <button
+                      onClick={handleVendorLogout}
+                      className="text-[10px] bg-white border border-emerald-250 text-emerald-900 hover:bg-emerald-100 px-3 py-1.5 rounded-xl font-bold transition-all shadow-xs shrink-0 cursor-pointer"
+                    >
+                      🚪 Log Out / Switch Partner
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {!activeVendorSession || activeVendorSession.status === "pending" ? (
+              {!activeVendorSession ? (
+                <div className="py-6 space-y-6">
+                  {/* Tab Selector for Login/Registration */}
+                  <div className="flex border-b border-slate-150">
+                    <button
+                      type="button"
+                      onClick={() => setVendorTabMode("login")}
+                      className={`flex-1 pb-3 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+                        vendorTabMode === "login"
+                          ? "border-emerald-800 text-emerald-800"
+                          : "border-transparent text-slate-400 hover:text-slate-700"
+                      }`}
+                    >
+                      🔐 Already Registered Log In
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVendorTabMode("register")}
+                      className={`flex-1 pb-3 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+                        vendorTabMode === "register"
+                          ? "border-emerald-800 text-emerald-800"
+                          : "border-transparent text-slate-400 hover:text-slate-700"
+                      }`}
+                    >
+                      🌱 Register New Partner Nursery
+                    </button>
+                  </div>
+
+                  {vendorTabMode === "login" ? (
+                    /* Login Form */
+                    <form onSubmit={handleVendorLogin} className="border border-slate-150 bg-slate-50/50 p-6 rounded-3xl space-y-4 max-w-md mx-auto shadow-xs text-left">
+                      <div className="text-center space-y-1">
+                        <h3 className="font-display font-bold text-slate-950 text-base">Partner Nursery Login Link</h3>
+                        <p className="text-[11px] text-slate-500">Input your registered Business Email Contact to instantly boot your workstation.</p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Business Email Contact</label>
+                        <input
+                          type="email"
+                          required
+                          value={vendorLoginEmail}
+                          onChange={(e) => setVendorLoginEmail(e.target.value)}
+                          placeholder="e.g. rajesh@greenwood.com"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full bg-emerald-800 text-white font-bold text-xs py-3 rounded-xl hover:bg-emerald-950 transition-all shadow-sm cursor-pointer"
+                      >
+                        ✔ Direct Secure Desktop Link Login
+                      </button>
+
+                      <p className="text-[10px] text-slate-400 text-center leading-normal">
+                        Don't have a nursery registered yet?{" "}
+                        <span onClick={() => setVendorTabMode("register")} className="text-emerald-700 font-bold hover:underline cursor-pointer">
+                          Apply for registration now
+                        </span>
+                      </p>
+                    </form>
+                  ) : (
+                    /* Register application form */
+                    <form onSubmit={handleRegisterVendor} className="border border-slate-100 bg-slate-50/50 p-6 rounded-2xl space-y-4 text-left">
+                      <h3 className="font-display font-semibold text-slate-900 text-sm">New Local Vendor Registration Form</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-500">Contact Officer Name</label>
+                          <input
+                            type="text"
+                            required
+                            value={vendorRegName}
+                            onChange={(e) => setVendorRegName(e.target.value)}
+                            placeholder="e.g. Ramesh Kumar"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-500">Nursery Store Brand Name</label>
+                          <input
+                            type="text"
+                            required
+                            value={vendorRegNursery}
+                            onChange={(e) => setVendorRegNursery(e.target.value)}
+                            placeholder="e.g. Greenwood Valley Nursery"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-500">Business Email Contact</label>
+                          <input
+                            type="email"
+                            required
+                            value={vendorRegEmail}
+                            onChange={(e) => setVendorRegEmail(e.target.value)}
+                            placeholder="e.g. ramesh@greenwood.com"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-500">Business Phone Number</label>
+                          <input
+                            type="text"
+                            required
+                            value={vendorRegPhone}
+                            onChange={(e) => setVendorRegPhone(e.target.value)}
+                            placeholder="e.g. +91 99888 77665"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600"
+                          />
+                        </div>
+                        <div className="md:col-span-2 space-y-1">
+                          <label className="text-[11px] font-bold text-slate-500">Nursery Location Address</label>
+                          <input
+                            type="text"
+                            required
+                            value={vendorRegAddress}
+                            onChange={(e) => setVendorRegAddress(e.target.value)}
+                            placeholder="e.g. Sector 14, Gurugram, India"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600"
+                          />
+                        </div>
+                        <div className="md:col-span-2 space-y-1">
+                          <label className="text-[11px] font-bold text-slate-500 block">Nursery Owner Profile Photograph / License Proof</label>
+                          <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3 rounded-xl border border-slate-200">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handlePhotoUpload(e, setVendorRegPhoto)}
+                              className="text-xs w-full text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-55 file:text-emerald-800 hover:file:bg-emerald-100 cursor-pointer"
+                            />
+                            {vendorRegPhoto && (
+                              <img src={vendorRegPhoto} alt="Upload Preview" className="w-16 h-16 object-cover rounded-lg border border-slate-250 shadow-xs" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full bg-emerald-800 text-white font-bold text-xs py-3 rounded-xl hover:bg-emerald-950 transition-all shadow-sm cursor-pointer"
+                      >
+                        Submit Registration Entry for Verification
+                      </button>
+                    </form>
+                  )}
+                </div>
+              ) : activeVendorSession.status === "pending" ? (
                 <div className="py-6 space-y-6">
                   {/* Status Indicator banner */}
-                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-xs flex gap-3">
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-xs flex gap-3 text-left">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-bold">Nursery Status Flag: PENDING APPROVAL</p>
@@ -2472,75 +3070,22 @@ export default function App() {
                       </p>
                     </div>
                   </div>
-
-                  {/* Register application form */}
-                  <form onSubmit={handleRegisterVendor} className="border border-slate-100 bg-slate-50/50 p-6 rounded-2xl space-y-4">
-                    <h3 className="font-display font-semibold text-slate-900 text-sm">New Local Vendor Registration Form</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-slate-500">Contact Officer Name</label>
-                        <input
-                          type="text"
-                          required
-                          value={vendorRegName}
-                          onChange={(e) => setVendorRegName(e.target.value)}
-                          placeholder="e.g. Ramesh Kumar"
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-slate-500">Nursery Store Brand Name</label>
-                        <input
-                          type="text"
-                          required
-                          value={vendorRegNursery}
-                          onChange={(e) => setVendorRegNursery(e.target.value)}
-                          placeholder="e.g. Greenwood Valley Nursery"
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-slate-500">Business Email Contact</label>
-                        <input
-                          type="email"
-                          required
-                          value={vendorRegEmail}
-                          onChange={(e) => setVendorRegEmail(e.target.value)}
-                          placeholder="e.g. ramesh@greenwood.com"
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-slate-500">Business Phone Number</label>
-                        <input
-                          type="text"
-                          required
-                          value={vendorRegPhone}
-                          onChange={(e) => setVendorRegPhone(e.target.value)}
-                          placeholder="e.g. +91 99888 77665"
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600"
-                        />
-                      </div>
-                      <div className="md:col-span-2 space-y-1">
-                        <label className="text-[11px] font-bold text-slate-500">Nursery Location Address</label>
-                        <input
-                          type="text"
-                          required
-                          value={vendorRegAddress}
-                          onChange={(e) => setVendorRegAddress(e.target.value)}
-                          placeholder="e.g. Sector 14, Gurugram, India"
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-600"
-                        />
-                      </div>
+                  
+                  <div className="bg-slate-50 p-6 rounded-3xl text-center text-xs text-slate-500 border border-slate-200 max-w-md mx-auto space-y-4">
+                    <p className="font-bold text-slate-800 text-sm">🌱 Verification In Progress</p>
+                    <p className="leading-relaxed">Your nursery registration details are saved. Administrators must approve your application before you can modify listings or accept delivery dispatches.</p>
+                    <div className="p-3 bg-white border border-slate-150 rounded-2xl text-left space-y-1 text-slate-700">
+                      <p><strong>Nursery Name:</strong> {activeVendorSession.nurseryName}</p>
+                      <p><strong>Contact Email:</strong> {activeVendorSession.contactEmail}</p>
+                      <p><strong>Location:</strong> {activeVendorSession.address}</p>
                     </div>
-
                     <button
-                      type="submit"
-                      className="w-full bg-emerald-800 text-white font-bold text-xs py-3 rounded-xl hover:bg-emerald-950 transition-all shadow-sm"
+                      onClick={handleVendorLogout}
+                      className="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-100 transition-colors shadow-xs cursor-pointer"
                     >
-                      Submit Registration Entry for Verification
+                      🚪 Log Out / Switch Nursery
                     </button>
-                  </form>
+                  </div>
                 </div>
               ) : (
                 <div className="mt-6 space-y-8">
@@ -2703,15 +3248,58 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-500">Plant Image Url</label>
-                          <input
-                            type="text"
-                            value={newPlantImage}
-                            onChange={(e) => setNewPlantImage(e.target.value)}
-                            placeholder="https://images.unsplash.com/..."
-                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none text-[11px] font-mono"
-                          />
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Plant Photo Upload (Saved to Database)</label>
+                          
+                          <div className="flex gap-3">
+                            {/* File Upload Box */}
+                            <label className="flex-1 border-2 border-dashed border-emerald-200 hover:border-emerald-500 bg-emerald-50/20 rounded-2xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all gap-1">
+                              <Camera className="w-5 h-5 text-emerald-750 animate-pulse" />
+                              <span className="text-[10px] font-bold text-slate-700">Capture or Upload Photo</span>
+                              <span className="text-[8px] text-slate-400">supports Camera, PNG, JPG (Auto-scaled)</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      setNewPlantImage(reader.result as string);
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                              />
+                            </label>
+
+                            {/* Live Thumbnail Preview */}
+                            {newPlantImage && (
+                              <div className="w-20 h-20 rounded-2xl border border-slate-200 overflow-hidden relative shrink-0 bg-white group shadow-sm">
+                                <img src={newPlantImage} className="w-full h-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => setNewPlantImage("")}
+                                  className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[8px] text-white font-bold cursor-pointer"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Fallback Option */}
+                          <div className="mt-1">
+                            <input
+                              type="text"
+                              value={newPlantImage}
+                              onChange={(e) => setNewPlantImage(e.target.value)}
+                              placeholder="Or enter plant image URL e.g. https://images.unsplash.com/..."
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-[10px] focus:outline-none"
+                            />
+                          </div>
                         </div>
 
                         <div className="space-y-1">
@@ -3002,8 +3590,87 @@ export default function App() {
         )}
 
         {/* TAB 5: ADMIN CABINET */}
-        {currentTab === "admin" && (
+        {currentTab === "admin" && !isAdminLoggedIn && (
+          <div className="max-w-md mx-auto space-y-6 animate-fade-in py-12">
+            <div className="bg-white p-8 rounded-3xl border border-slate-150 shadow-lg text-left space-y-6">
+              <div className="text-center space-y-2">
+                <span className="text-4xl">🔐</span>
+                <h2 className="text-xl font-bold font-display text-slate-900">PlantAdda Admin Registry</h2>
+                <p className="text-xs text-slate-500">
+                  Please authenticate using central executive credentials to access regulatory parameters.
+                </p>
+                <div className="bg-emerald-50 text-emerald-800 p-2.5 rounded-xl text-[11px] font-medium leading-relaxed">
+                  💡 Hint: Enter <b>admin</b> & <b>admin123</b> to unlock.
+                </div>
+              </div>
+
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (adminUsername === "admin" && adminPassword === "admin123") {
+                    setIsAdminLoggedIn(true);
+                    localStorage.setItem("admin_logged_in", "true");
+                    alert("🔓 Admin credentials verified successfully!");
+                  } else {
+                    alert("❌ Authentication failed. Invalid username or password.");
+                  }
+                }} 
+                className="space-y-4"
+              >
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 block">Username</label>
+                  <input
+                    type="text"
+                    required
+                    value={adminUsername}
+                    onChange={(e) => setAdminUsername(e.target.value)}
+                    placeholder="Enter admin username"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:bg-white rounded-xl px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-emerald-200"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-500 block">Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="Enter admin password"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:bg-white rounded-xl px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-emerald-200"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-emerald-800 text-white font-bold text-xs py-3 rounded-xl hover:bg-emerald-950 transition-all shadow-sm cursor-pointer"
+                >
+                  🚀 Log In to Administrative Workbench
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {currentTab === "admin" && isAdminLoggedIn && (
           <div className="space-y-8 animate-fade-in">
+            {/* Authenticated header status */}
+            <div className="flex justify-between items-center bg-emerald-50 p-4 border border-emerald-100 rounded-3xl mb-1 text-left">
+              <div className="text-left">
+                <span className="bg-emerald-800 text-white text-[8px] font-black tracking-widest uppercase px-2.5 py-1 rounded-full inline-block">Authenticated</span>
+                <p className="text-xs font-bold text-emerald-950 mt-1">🔓 Master Administrative Dashboard Connected</p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsAdminLoggedIn(false);
+                  localStorage.removeItem("admin_logged_in");
+                  alert("🔒 Logged out of administrative session successfully.");
+                }}
+                className="text-[10px] bg-white border border-rose-250 text-rose-700 hover:bg-rose-50 font-bold px-3 py-1.5 rounded-xl transition-all shadow-xs cursor-pointer"
+              >
+                🔒 Terminate Session / Log Out
+              </button>
+            </div>
             
             {/* Quick Metrics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -3335,11 +4002,20 @@ export default function App() {
                     {vendors
                       .filter(v => v.status === "pending")
                       .map((vend) => (
-                        <div key={vend.id} className="p-4 border border-slate-100 rounded-2xl bg-slate-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs">
-                          <div className="space-y-1.5">
-                            <p className="font-bold text-slate-900">{vend.nurseryName}</p>
-                            <p className="text-slate-450">Representative: {vend.name} &bull; {vend.contactEmail} &bull; {vend.contactPhone}</p>
-                            <p className="text-slate-500 italic">Address: {vend.address}</p>
+                        <div key={vend.id} className="p-4 border border-slate-100 rounded-2xl bg-slate-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs text-left">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-xl bg-slate-200 overflow-hidden shrink-0 border border-slate-300">
+                              {vend.photograph ? (
+                                <img src={vend.photograph} alt="License Portrait" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-slate-400 bg-slate-100 uppercase text-[10px] font-bold">No Photo</div>
+                              )}
+                            </div>
+                            <div className="space-y-1">
+                              <p className="font-bold text-slate-900">{vend.nurseryName}</p>
+                              <p className="text-slate-450">Representative: {vend.name} &bull; {vend.contactEmail} &bull; {vend.contactPhone}</p>
+                              <p className="text-slate-500 italic">Address: {vend.address}</p>
+                            </div>
                           </div>
                           <div className="flex gap-2 shrink-0">
                             <button
@@ -4371,9 +5047,26 @@ export default function App() {
                     </div>
                   </div>
 
-                  <p className="text-[10px] text-slate-400 italic">
-                    Certified nursery dispatch code assigned: {placedOrderDetails.assignedVendorId}. Delivery agents are rolling.
-                  </p>
+                  {(() => {
+                    const assignedNursery = vendors.find(v => v.id === placedOrderDetails.assignedVendorId);
+                    return assignedNursery ? (
+                      <div className="bg-emerald-50/50 p-3.5 border border-emerald-100 rounded-2xl mt-3 text-left space-y-1">
+                        <div className="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+                          🏡 Dispatched by: {assignedNursery.nurseryName}
+                        </div>
+                        <p className="text-[10px] text-slate-600 font-medium">
+                          Contact Call: {assignedNursery.contactPhone}
+                        </p>
+                        <p className="text-[9px] text-slate-500 leading-normal">
+                          Pickup Address: {assignedNursery.address}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-slate-400 italic">
+                        Certified nursery dispatch code assigned: {placedOrderDetails.assignedVendorId}. Delivery agents are rolling.
+                      </p>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -4521,12 +5214,29 @@ export default function App() {
                     </p>
                   </div>
 
-                  <div className="space-y-2 text-xs">
-                    <h4 className="font-semibold text-slate-800">Recipients details:</h4>
-                    <div className="bg-slate-50 p-3 rounded-xl space-y-1 text-slate-600 font-mono text-[11px]">
-                      <p>Name: {orderObj.customerName}</p>
-                      <p>Address: {orderObj.customerAddress}</p>
-                      <p>Charge Total: ₹{orderObj.total}</p>
+                  <div className="space-y-3 text-xs text-left">
+                    {/* Dispatching origin details */}
+                    {(() => {
+                      const trackingVendor = vendors.find(v => v.id === orderObj.assignedVendorId);
+                      return trackingVendor && (
+                        <div className="space-y-1 bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
+                          <h4 className="font-bold text-emerald-950">🏡 Dispatched From Nursery:</h4>
+                          <div className="text-[11px] text-slate-800 leading-normal font-medium">
+                            <p>Brand Name: {trackingVendor.nurseryName}</p>
+                            <p>Owner Desk: {trackingVendor.name} ({trackingVendor.contactPhone})</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">Location: {trackingVendor.address}</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="space-y-1">
+                      <h4 className="font-semibold text-slate-800">Recipients details:</h4>
+                      <div className="bg-slate-50 p-3 rounded-xl space-y-1 text-slate-600 font-mono text-[11px]">
+                        <p>Name: {orderObj.customerName}</p>
+                        <p>Address: {orderObj.customerAddress}</p>
+                        <p>Charge Total: ₹{orderObj.total}</p>
+                      </div>
                     </div>
                   </div>
 

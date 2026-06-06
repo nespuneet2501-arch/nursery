@@ -4,12 +4,12 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
-import { Category, Plant, Vendor, Order, AMCService, DeliverySettings } from "./src/types.js";
+import { Category, Plant, Vendor, Customer, Order, AMCService, DeliverySettings } from "./src/types.js";
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = 3000;
 
 // Setup JSON parsing limits to handle base64 image uploads for AI scanner
 app.use(express.json({ limit: "15mb" }));
@@ -35,6 +35,7 @@ const DB_FILE = path.join(process.cwd(), "db.json");
 interface DatabaseSchema {
   plants: Plant[];
   vendors: Vendor[];
+  customers?: Customer[];
   orders: Order[];
   amc_services: AMCService[];
   delivery_settings: DeliverySettings;
@@ -362,6 +363,7 @@ function initDB(): DatabaseSchema {
       loadedDb = {
         plants: INITIAL_PLANTS,
         vendors: INITIAL_VENDORS,
+        customers: [],
         orders: [],
         amc_services: [],
         delivery_settings: INITIAL_DELIVERY_SETTINGS
@@ -371,10 +373,15 @@ function initDB(): DatabaseSchema {
     loadedDb = {
       plants: INITIAL_PLANTS,
       vendors: INITIAL_VENDORS,
+      customers: [],
       orders: [],
       amc_services: [],
       delivery_settings: INITIAL_DELIVERY_SETTINGS
     };
+  }
+
+  if (!loadedDb.customers) {
+    loadedDb.customers = [];
   }
 
   // Ensure fields are populated
@@ -637,9 +644,24 @@ app.get("/api/vendors", (req, res) => {
   res.json(db.vendors);
 });
 
+// Vendor Login
+app.post("/api/vendors/login", (req, res) => {
+  const { contactEmail } = req.body;
+  if (!contactEmail) {
+    res.status(400).json({ error: "Please enter your registered email address" });
+    return;
+  }
+  const vendor = db.vendors.find(v => v.contactEmail.toLowerCase() === contactEmail.toLowerCase().trim());
+  if (!vendor) {
+    res.status(404).json({ error: "No registered nursery found for this email address" });
+    return;
+  }
+  res.json(vendor);
+});
+
 // Vendor Registration
 app.post("/api/vendors/register", (req, res) => {
-  const { name, nurseryName, contactEmail, contactPhone, address } = req.body;
+  const { name, nurseryName, contactEmail, contactPhone, address, photograph } = req.body;
   if (!name || !nurseryName || !contactEmail || !contactPhone || !address) {
     res.status(400).json({ error: "Please fill out all vendor registration details" });
     return;
@@ -660,12 +682,51 @@ app.post("/api/vendors/register", (req, res) => {
     address,
     status: "pending", // Waiting for Admin approval
     joinDate: new Date().toISOString().split("T")[0],
-    commissionPaidPercent: db.delivery_settings.baseCommissionPercent
+    commissionPaidPercent: db.delivery_settings.baseCommissionPercent,
+    photograph: photograph || ""
   };
 
   db.vendors.push(newVendor);
   saveDB(db);
   res.status(201).json(newVendor);
+});
+
+// 2b. Customer Management
+app.get("/api/customers", (req, res) => {
+  res.json(db.customers || []);
+});
+
+// Customer Registration
+app.post("/api/customers/register", (req, res) => {
+  const { name, email, phone, address, photograph } = req.body;
+  if (!name || !email || !phone || !address) {
+    res.status(400).json({ error: "Please fill out all customer registration details (Name, Email, Phone, Address)" });
+    return;
+  }
+
+  if (!db.customers) {
+    db.customers = [];
+  }
+
+  const existingCustomer = db.customers.find(c => c.email.toLowerCase() === email.toLowerCase().trim());
+  if (existingCustomer) {
+    res.status(400).json({ error: "Customer registration already exists for this email" });
+    return;
+  }
+
+  const newCustomer: Customer = {
+    id: "cust-" + Date.now(),
+    name,
+    email: email.trim(),
+    phone,
+    address,
+    photograph: photograph || "",
+    joinDate: new Date().toISOString().split("T")[0]
+  };
+
+  db.customers.push(newCustomer);
+  saveDB(db);
+  res.status(201).json(newCustomer);
 });
 
 // Approve/Reject vendor (Admin action)

@@ -48,6 +48,17 @@ export interface Vendor {
   proposedDeliveryCharge?: number; // Proposed by vendor
   deliveryChargeStatus?: "pending" | "approved" | "rejected"; 
   approvedDeliveryCharge?: number; // Active/approved or overridden delivery charge
+  photograph?: string; // base64 or link
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  photograph?: string; // base64 or URL
+  joinDate: string;
 }
 
 export interface ReturnRequest {
