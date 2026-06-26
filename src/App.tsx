@@ -366,73 +366,187 @@ export default function App() {
   };
 
   // FETCH METHODS
+  // Load initial static data from db.json if API is offline
+  const loadInitialStaticData = async () => {
+    const urls = [
+      `${(import.meta as any).env?.BASE_URL || "/"}db.json`,
+      "db.json",
+      "/db.json"
+    ];
+    for (const url of urls) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          const db = await res.json();
+          const loadedPlants = db.plants || [];
+          const loadedVendors = db.vendors || [];
+          const loadedCustomers = db.customers || [];
+          const loadedOrders = db.orders || [];
+          const loadedSettings = db.delivery_settings || {
+            id: "settings",
+            freeDeliveryThreshold: 499,
+            standardDeliveryCharge: 49,
+            baseCommissionPercent: 12
+          };
+          const loadedPromo = db.promotional_banner || {
+            imageUrl: "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=1200&q=80",
+            title: "🌱 Monsoon Special Sale: Flat 20% OFF on all Green Air Purifiers!",
+            isActive: true,
+            newsText: "PlantAdda certified local nursery centers are now fully operational in 12+ states in India!"
+          };
+
+          if (!localStorage.getItem("plantadda_plants")) {
+            setPlants(loadedPlants);
+            localStorage.setItem("plantadda_plants", JSON.stringify(loadedPlants));
+          }
+          if (!localStorage.getItem("plantadda_vendors")) {
+            setVendors(loadedVendors);
+            localStorage.setItem("plantadda_vendors", JSON.stringify(loadedVendors));
+          }
+          if (!localStorage.getItem("plantadda_customers")) {
+            setCustomers(loadedCustomers);
+            localStorage.setItem("plantadda_customers", JSON.stringify(loadedCustomers));
+          }
+          if (!localStorage.getItem("plantadda_orders")) {
+            setOrders(loadedOrders);
+            localStorage.setItem("plantadda_orders", JSON.stringify(loadedOrders));
+          }
+          if (!localStorage.getItem("plantadda_deliverySettings")) {
+            setDeliverySettings(loadedSettings);
+            localStorage.setItem("plantadda_deliverySettings", JSON.stringify(loadedSettings));
+          }
+          if (!localStorage.getItem("plantadda_promoBanner")) {
+            setPromoBanner(loadedPromo);
+            localStorage.setItem("plantadda_promoBanner", JSON.stringify(loadedPromo));
+          }
+          console.log("Successfully seeded local database from static source:", url);
+          return;
+        }
+      } catch (err) {
+        console.warn(`Static data fetch failed for ${url}:`, err);
+      }
+    }
+  };
+
   const fetchPlants = async () => {
     try {
       const res = await fetch("/api/plants");
+      if (!res.ok) throw new Error("Status " + res.status);
       const data = await res.json();
       setPlants(data || []);
+      localStorage.setItem("plantadda_plants", JSON.stringify(data || []));
     } catch (e) {
-      console.error("Error loading plants", e);
+      console.warn("Using offline fallback for plants", e);
+      const saved = localStorage.getItem("plantadda_plants");
+      if (saved) {
+        setPlants(JSON.parse(saved));
+      } else {
+        await loadInitialStaticData();
+      }
     }
   };
 
   const fetchVendors = async () => {
     try {
       const res = await fetch("/api/vendors");
+      if (!res.ok) throw new Error("Status " + res.status);
       const data = await res.json();
       setVendors(data || []);
+      localStorage.setItem("plantadda_vendors", JSON.stringify(data || []));
     } catch (e) {
-      console.error("Error loading vendors", e);
+      console.warn("Using offline fallback for vendors", e);
+      const saved = localStorage.getItem("plantadda_vendors");
+      if (saved) {
+        setVendors(JSON.parse(saved));
+      } else {
+        await loadInitialStaticData();
+      }
     }
   };
 
   const fetchCustomers = async () => {
     try {
       const res = await fetch("/api/customers");
+      if (!res.ok) throw new Error("Status " + res.status);
       const data = await res.json();
       setCustomers(data || []);
+      localStorage.setItem("plantadda_customers", JSON.stringify(data || []));
     } catch (e) {
-      console.error("Error loading customers", e);
+      console.warn("Using offline fallback for customers", e);
+      const saved = localStorage.getItem("plantadda_customers");
+      if (saved) {
+        setCustomers(JSON.parse(saved));
+      } else {
+        await loadInitialStaticData();
+      }
     }
   };
 
   const fetchOrders = async () => {
     try {
       const res = await fetch("/api/orders");
+      if (!res.ok) throw new Error("Status " + res.status);
       const data = await res.json();
       setOrders(data || []);
+      localStorage.setItem("plantadda_orders", JSON.stringify(data || []));
     } catch (e) {
-      console.error("Error loading orders", e);
+      console.warn("Using offline fallback for orders", e);
+      const saved = localStorage.getItem("plantadda_orders");
+      if (saved) {
+        setOrders(JSON.parse(saved));
+      } else {
+        await loadInitialStaticData();
+      }
     }
   };
 
   const fetchDeliverySettings = async () => {
     try {
       const res = await fetch("/api/delivery-settings");
-      if (res.ok) {
-        const data = await res.json();
+      if (!res.ok) throw new Error("Status " + res.status);
+      const data = await res.json();
+      setDeliverySettings(data);
+      setDeliveryChargeInput(data.standardDeliveryCharge.toString());
+      setDeliveryThresholdInput(data.freeDeliveryThreshold.toString());
+      localStorage.setItem("plantadda_deliverySettings", JSON.stringify(data));
+    } catch (e) {
+      console.warn("Using offline fallback for delivery settings", e);
+      const saved = localStorage.getItem("plantadda_deliverySettings");
+      if (saved) {
+        const data = JSON.parse(saved);
         setDeliverySettings(data);
         setDeliveryChargeInput(data.standardDeliveryCharge.toString());
         setDeliveryThresholdInput(data.freeDeliveryThreshold.toString());
+      } else {
+        await loadInitialStaticData();
       }
-    } catch (e) {
-      console.error("Error loading delivery settings", e);
     }
   };
 
   const fetchPromoBanner = async () => {
     try {
       const res = await fetch("/api/admin/promo");
-      if (res.ok) {
-        const data = await res.json();
+      if (!res.ok) throw new Error("Status " + res.status);
+      const data = await res.json();
+      setPromoBanner(data);
+      setBannerTitle(data.title);
+      setBannerUrl(data.imageUrl);
+      setBannerNews(data.newsText || "");
+      setBannerActive(data.isActive);
+      localStorage.setItem("plantadda_promoBanner", JSON.stringify(data));
+    } catch (e) {
+      console.warn("Using offline fallback for promo banner", e);
+      const saved = localStorage.getItem("plantadda_promoBanner");
+      if (saved) {
+        const data = JSON.parse(saved);
         setPromoBanner(data);
         setBannerTitle(data.title);
         setBannerUrl(data.imageUrl);
         setBannerNews(data.newsText || "");
         setBannerActive(data.isActive);
+      } else {
+        await loadInitialStaticData();
       }
-    } catch (e) {
-      console.error("Error loading promo banner", e);
     }
   };
 
@@ -471,18 +585,19 @@ export default function App() {
   // Register a Nursery
   const handleRegisterVendor = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = {
+      name: vendorRegName,
+      nurseryName: vendorRegNursery,
+      contactEmail: vendorRegEmail,
+      contactPhone: vendorRegPhone,
+      address: vendorRegAddress,
+      photograph: vendorRegPhoto
+    };
     try {
       const res = await fetch("/api/vendors/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: vendorRegName,
-          nurseryName: vendorRegNursery,
-          contactEmail: vendorRegEmail,
-          contactPhone: vendorRegPhone,
-          address: vendorRegAddress,
-          photograph: vendorRegPhoto
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok) {
@@ -501,7 +616,32 @@ export default function App() {
         addNotification("Registration failed: " + data.error, "warning");
       }
     } catch (err) {
-      addNotification("Error registering nursery.", "warning");
+      console.warn("API write failed, using local fallback", err);
+      const newVendor = {
+        id: "vend-" + Math.random().toString(36).slice(2, 11),
+        ...payload,
+        status: "pending" as const,
+        joinDate: new Date().toISOString().split("T")[0],
+        commissionPaidPercent: 12,
+        approvedDeliveryCharge: 45,
+        proposedDeliveryCharge: 45,
+        deliveryChargeStatus: "approved" as const,
+        password: "123"
+      };
+      const currentVendors = JSON.parse(localStorage.getItem("plantadda_vendors") || "[]");
+      const updatedVendors = [...currentVendors, newVendor];
+      localStorage.setItem("plantadda_vendors", JSON.stringify(updatedVendors));
+      setVendors(updatedVendors);
+
+      addNotification("🌿 Nursery registered successfully (Offline Mode)! Access is currently 'pending' admin approval.", "success");
+      setActiveSession({ role: "vendor", data: newVendor });
+      setShowLoginModal(false);
+      setVendorRegName("");
+      setVendorRegNursery("");
+      setVendorRegEmail("");
+      setVendorRegPhone("");
+      setVendorRegAddress("");
+      setVendorRegPhoto("");
     }
   };
 
@@ -539,24 +679,41 @@ export default function App() {
         addNotification(data.error || "Incorrect password or nursery center not found.", "warning");
       }
     } catch (err) {
-      addNotification("Login process error.", "warning");
+      console.warn("API login failed, using local fallback", err);
+      const currentVendors = JSON.parse(localStorage.getItem("plantadda_vendors") || "[]");
+      const vendor = currentVendors.find((v: any) => v.contactEmail === emailToUse);
+      if (vendor) {
+        if (vendor.status === "rejected") {
+          addNotification("❌ Access denied. This nursery portal is rejected by the administrator.", "warning");
+          return;
+        }
+        setActiveSession({ role: "vendor", data: vendor });
+        setShowLoginModal(false);
+        addNotification(`Welcome back to your workstation (Offline Mode), ${vendor.nurseryName}!`, "success");
+        setVendorLoginEmail("");
+        setVendorLoginPassword("");
+        setSelectedVendorForLogin(null);
+      } else {
+        addNotification("Nursery center not found offline.", "warning");
+      }
     }
   };
 
   // Register Customer at Payment / Login
   const handleRegisterCustomer = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    const payload = {
+      name: customerRegName,
+      email: customerRegEmail,
+      phone: customerRegPhone,
+      address: customerRegAddress,
+      photograph: customerRegPhoto
+    };
     try {
       const res = await fetch("/api/customers/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: customerRegName,
-          email: customerRegEmail,
-          phone: customerRegPhone,
-          address: customerRegAddress,
-          photograph: customerRegPhoto
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok) {
@@ -581,7 +738,30 @@ export default function App() {
         addNotification(data.error || "Customer registration failed", "warning");
       }
     } catch (err) {
-      addNotification("Error registering profile.", "warning");
+      console.warn("API write failed, using local fallback", err);
+      const newCustomer = {
+        id: "cust-" + Math.random().toString(36).slice(2, 11),
+        ...payload
+      };
+      const currentCustomers = JSON.parse(localStorage.getItem("plantadda_customers") || "[]");
+      const updatedCustomers = [...currentCustomers, newCustomer];
+      localStorage.setItem("plantadda_customers", JSON.stringify(updatedCustomers));
+      setCustomers(updatedCustomers);
+
+      addNotification(`🌱 Registered account for ${newCustomer.name} (Offline Mode)!`, "success");
+      setActiveSession({ role: "customer", data: newCustomer });
+      setCheckoutName(newCustomer.name);
+      setCheckoutEmail(newCustomer.email);
+      setCheckoutPhone(newCustomer.phone);
+      setCheckoutAddress(newCustomer.address);
+      setCheckoutPhoto(newCustomer.photograph || "");
+      
+      setCustomerRegName("");
+      setCustomerRegEmail("");
+      setCustomerRegPhone("");
+      setCustomerRegAddress("");
+      setCustomerRegPhoto("");
+      return newCustomer;
     }
     return null;
   };
@@ -601,16 +781,17 @@ export default function App() {
   // Change Promo Banner (Admin action)
   const handleUpdatePromo = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = {
+      title: bannerTitle,
+      imageUrl: bannerUrl,
+      isActive: bannerActive,
+      newsText: bannerNews
+    };
     try {
       const res = await fetch("/api/admin/promo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: bannerTitle,
-          imageUrl: bannerUrl,
-          isActive: bannerActive,
-          newsText: bannerNews
-        })
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         const data = await res.json();
@@ -618,7 +799,10 @@ export default function App() {
         addNotification("⚡ Promotional Banner updated successfully!", "success");
       }
     } catch (e) {
-      addNotification("Failed to update promotional banner", "warning");
+      console.warn("API promo update failed, using local fallback", e);
+      localStorage.setItem("plantadda_promoBanner", JSON.stringify(payload));
+      setPromoBanner(payload);
+      addNotification("⚡ Promotional Banner updated successfully (Offline Mode)!", "success");
     }
   };
 
@@ -637,22 +821,29 @@ export default function App() {
         addNotification("Failed to update nursery status", "warning");
       }
     } catch (e) {
-      addNotification("Server communications error", "warning");
+      console.warn("API update vendor status failed, using local fallback", e);
+      const currentVendors = JSON.parse(localStorage.getItem("plantadda_vendors") || "[]");
+      const updatedVendors = currentVendors.map((v: any) => v.id === vendorId ? { ...v, status } : v);
+      localStorage.setItem("plantadda_vendors", JSON.stringify(updatedVendors));
+      setVendors(updatedVendors);
+      addNotification(`Nursery status updated to: ${status.toUpperCase()} (Offline Mode)`, "success");
     }
   };
 
   // Save Delivery Settings (Admin action)
   const handleSaveDeliverySettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = {
+      id: "settings",
+      standardDeliveryCharge: Number(deliveryChargeInput),
+      freeDeliveryThreshold: Number(deliveryThresholdInput),
+      baseCommissionPercent: deliverySettings.baseCommissionPercent
+    };
     try {
       const res = await fetch("/api/delivery-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          standardDeliveryCharge: Number(deliveryChargeInput),
-          freeDeliveryThreshold: Number(deliveryThresholdInput),
-          baseCommissionPercent: deliverySettings.baseCommissionPercent
-        })
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         const data = await res.json();
@@ -660,7 +851,10 @@ export default function App() {
         addNotification("📦 Delivery parameters updated globally!", "success");
       }
     } catch (e) {
-      addNotification("Failed to save delivery parameters", "warning");
+      console.warn("API save delivery settings failed, using local fallback", e);
+      localStorage.setItem("plantadda_deliverySettings", JSON.stringify(payload));
+      setDeliverySettings(payload);
+      addNotification("📦 Delivery parameters updated globally (Offline Mode)!", "success");
     }
   };
 
@@ -679,7 +873,12 @@ export default function App() {
         fetchVendors();
       }
     } catch (e) {
-      addNotification("Failed to propose shipping rates", "warning");
+      console.warn("API propose shipping failed, using local fallback", e);
+      const currentVendors = JSON.parse(localStorage.getItem("plantadda_vendors") || "[]");
+      const updatedVendors = currentVendors.map((v: any) => v.id === activeSession.data.id ? { ...v, proposedDeliveryCharge: Number(proposedShippingInput), deliveryChargeStatus: "pending" as const } : v);
+      localStorage.setItem("plantadda_vendors", JSON.stringify(updatedVendors));
+      setVendors(updatedVendors);
+      addNotification("🚚 Courier price proposal submitted (Offline Mode)!", "success");
     }
   };
 
@@ -696,7 +895,21 @@ export default function App() {
         fetchVendors();
       }
     } catch (e) {
-      addNotification("Error handling courier rate request", "warning");
+      console.warn("API approve nursery shipping failed, using local fallback", e);
+      const currentVendors = JSON.parse(localStorage.getItem("plantadda_vendors") || "[]");
+      const updatedVendors = currentVendors.map((v: any) => {
+        if (v.id === vendorId) {
+          return {
+            ...v,
+            deliveryChargeStatus: action === "approve" ? ("approved" as const) : ("rejected" as const),
+            approvedDeliveryCharge: action === "approve" ? v.proposedDeliveryCharge : v.approvedDeliveryCharge
+          };
+        }
+        return v;
+      });
+      localStorage.setItem("plantadda_vendors", JSON.stringify(updatedVendors));
+      setVendors(updatedVendors);
+      addNotification(`Nursery shipping rate ${action}d (Offline Mode)!`, "success");
     }
   };
 
@@ -713,7 +926,12 @@ export default function App() {
         fetchPlants();
       }
     } catch (e) {
-      addNotification("Error updating admin discount", "warning");
+      console.warn("API set admin discount failed, using local fallback", e);
+      const currentPlants = JSON.parse(localStorage.getItem("plantadda_plants") || "[]");
+      const updatedPlants = currentPlants.map((p: any) => p.id === plantId ? { ...p, adminDiscount: additionalDiscount } : p);
+      localStorage.setItem("plantadda_plants", JSON.stringify(updatedPlants));
+      setPlants(updatedPlants);
+      addNotification(`Additional Admin Discount set to ${additionalDiscount}% (Offline Mode)!`, "success");
     }
   };
 
@@ -733,7 +951,9 @@ export default function App() {
       season: plantSeason,
       description: plantDesc || "A healthy homegrown plant nurtured with organic fertilizers.",
       vendorId: activeSession.data.id,
-      requestedByRole: "vendor"
+      requestedByRole: "vendor",
+      isAdminApproved: false,
+      adminDiscount: 0
     };
 
     try {
@@ -757,7 +977,29 @@ export default function App() {
         setPlantDesc("");
       }
     } catch (e) {
-      addNotification("Error publishing plant details", "warning");
+      console.warn("API save plant failed, using local fallback", e);
+      const currentPlants = JSON.parse(localStorage.getItem("plantadda_plants") || "[]");
+      let updatedPlants;
+      if (editingPlant) {
+        updatedPlants = currentPlants.map((p: any) => p.id === editingPlant.id ? { ...p, ...payload } : p);
+      } else {
+        const newPlant = {
+          id: "plant-" + Math.random().toString(36).slice(2, 11),
+          ...payload
+        };
+        updatedPlants = [...currentPlants, newPlant];
+      }
+      localStorage.setItem("plantadda_plants", JSON.stringify(updatedPlants));
+      setPlants(updatedPlants);
+
+      addNotification(editingPlant ? "🌱 Plant updated successfully (Offline Mode)! Pending review." : "🌱 New plant submitted to catalog (Offline Mode)! Pending review.", "success");
+      setShowAddPlantModal(false);
+      setEditingPlant(null);
+      // Clear fields
+      setPlantName("");
+      setPlantCare("");
+      setPlantImage("");
+      setPlantDesc("");
     }
   };
 
@@ -774,7 +1016,12 @@ export default function App() {
         fetchPlants();
       }
     } catch (e) {
-      addNotification("Error updating plant visibility", "warning");
+      console.warn("API approve plant failed, using local fallback", e);
+      const currentPlants = JSON.parse(localStorage.getItem("plantadda_plants") || "[]");
+      const updatedPlants = currentPlants.map((p: any) => p.id === plantId ? { ...p, isAdminApproved: approved } : p);
+      localStorage.setItem("plantadda_plants", JSON.stringify(updatedPlants));
+      setPlants(updatedPlants);
+      addNotification(approved ? "Plant approved for the marketplace (Offline Mode)!" : "Plant restricted from marketplace (Offline Mode)", "success");
     }
   };
 
@@ -902,14 +1149,52 @@ export default function App() {
         paymentStatus: "paid"
       };
 
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+      let data;
+      let ok = false;
+      try {
+        const res = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          data = await res.json();
+          ok = true;
+        } else {
+          const errData = await res.json();
+          addNotification("Payment processing failed: " + errData.error, "warning");
+          return;
+        }
+      } catch (err) {
+        console.warn("API write for placing order failed, using offline fallback", err);
+        const newOrder = {
+          id: "ord-" + Math.random().toString(36).slice(2, 11),
+          ...payload,
+          date: new Date().toISOString().split("T")[0],
+          status: "pending" as const
+        };
+        const currentOrders = JSON.parse(localStorage.getItem("plantadda_orders") || "[]");
+        const updatedOrders = [newOrder, ...currentOrders];
+        localStorage.setItem("plantadda_orders", JSON.stringify(updatedOrders));
+        setOrders(updatedOrders);
 
-      const data = await res.json();
-      if (res.ok) {
+        // Deduct plant stocks locally
+        const currentPlants = JSON.parse(localStorage.getItem("plantadda_plants") || "[]");
+        const updatedPlants = currentPlants.map((p: any) => {
+          const cartItem = cart.find(c => c.plantId === p.id);
+          if (cartItem) {
+            return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) };
+          }
+          return p;
+        });
+        localStorage.setItem("plantadda_plants", JSON.stringify(updatedPlants));
+        setPlants(updatedPlants);
+
+        data = newOrder;
+        ok = true;
+      }
+
+      if (ok && data) {
         setPlacedOrder(data);
         setCart([]);
         setCheckoutStep("success");
@@ -921,8 +1206,6 @@ export default function App() {
         
         // Setup simple persistent mock notification in notification list
         addNotification(`📦 Order #${data.id.slice(0,8)} of ₹${Math.round(total)} is assigned to dispatch team.`, "info");
-      } else {
-        addNotification("Payment processing failed: " + data.error, "warning");
       }
     } catch (e: any) {
       addNotification("Billing connection error: " + e.message, "warning");
