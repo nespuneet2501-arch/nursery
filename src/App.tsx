@@ -560,19 +560,23 @@ CREATE TABLE public.orders (
             newsText: "PlantAdda certified local nursery centers are now fully operational in 12+ states in India!"
           };
 
-          if (!localStorage.getItem("plantadda_plants")) {
+          const storedPlants = localStorage.getItem("plantadda_plants");
+          if (!storedPlants || !Array.isArray(JSON.parse(storedPlants)) || JSON.parse(storedPlants).length === 0) {
             setPlants(loadedPlants);
             localStorage.setItem("plantadda_plants", JSON.stringify(loadedPlants));
           }
-          if (!localStorage.getItem("plantadda_vendors")) {
+          const storedVendors = localStorage.getItem("plantadda_vendors");
+          if (!storedVendors || !Array.isArray(JSON.parse(storedVendors)) || JSON.parse(storedVendors).length === 0) {
             setVendors(loadedVendors);
             localStorage.setItem("plantadda_vendors", JSON.stringify(loadedVendors));
           }
-          if (!localStorage.getItem("plantadda_customers")) {
+          const storedCustomers = localStorage.getItem("plantadda_customers");
+          if (!storedCustomers || !Array.isArray(JSON.parse(storedCustomers)) || JSON.parse(storedCustomers).length === 0) {
             setCustomers(loadedCustomers);
             localStorage.setItem("plantadda_customers", JSON.stringify(loadedCustomers));
           }
-          if (!localStorage.getItem("plantadda_orders")) {
+          const storedOrders = localStorage.getItem("plantadda_orders");
+          if (!storedOrders || !Array.isArray(JSON.parse(storedOrders)) || JSON.parse(storedOrders).length === 0) {
             setOrders(loadedOrders);
             localStorage.setItem("plantadda_orders", JSON.stringify(loadedOrders));
           }
@@ -598,12 +602,16 @@ CREATE TABLE public.orders (
       const res = await fetch("/api/plants");
       if (!res.ok) throw new Error("Status " + res.status);
       const data = await res.json();
-      setPlants(data || []);
-      localStorage.setItem("plantadda_plants", JSON.stringify(data || []));
+      if (Array.isArray(data) && data.length > 0) {
+        setPlants(data);
+        localStorage.setItem("plantadda_plants", JSON.stringify(data));
+      } else {
+        throw new Error("Empty plants list from API");
+      }
     } catch (e) {
       console.warn("Using offline fallback for plants", e);
       const saved = localStorage.getItem("plantadda_plants");
-      if (saved) {
+      if (saved && Array.isArray(JSON.parse(saved)) && JSON.parse(saved).length > 0) {
         setPlants(JSON.parse(saved));
       } else {
         await loadInitialStaticData();
@@ -616,12 +624,16 @@ CREATE TABLE public.orders (
       const res = await fetch("/api/vendors");
       if (!res.ok) throw new Error("Status " + res.status);
       const data = await res.json();
-      setVendors(data || []);
-      localStorage.setItem("plantadda_vendors", JSON.stringify(data || []));
+      if (Array.isArray(data) && data.length > 0) {
+        setVendors(data);
+        localStorage.setItem("plantadda_vendors", JSON.stringify(data));
+      } else {
+        throw new Error("Empty vendors list from API");
+      }
     } catch (e) {
       console.warn("Using offline fallback for vendors", e);
       const saved = localStorage.getItem("plantadda_vendors");
-      if (saved) {
+      if (saved && Array.isArray(JSON.parse(saved)) && JSON.parse(saved).length > 0) {
         setVendors(JSON.parse(saved));
       } else {
         await loadInitialStaticData();
@@ -634,12 +646,16 @@ CREATE TABLE public.orders (
       const res = await fetch("/api/customers");
       if (!res.ok) throw new Error("Status " + res.status);
       const data = await res.json();
-      setCustomers(data || []);
-      localStorage.setItem("plantadda_customers", JSON.stringify(data || []));
+      if (Array.isArray(data) && data.length > 0) {
+        setCustomers(data);
+        localStorage.setItem("plantadda_customers", JSON.stringify(data));
+      } else {
+        throw new Error("Empty customers list from API");
+      }
     } catch (e) {
       console.warn("Using offline fallback for customers", e);
       const saved = localStorage.getItem("plantadda_customers");
-      if (saved) {
+      if (saved && Array.isArray(JSON.parse(saved)) && JSON.parse(saved).length > 0) {
         setCustomers(JSON.parse(saved));
       } else {
         await loadInitialStaticData();
@@ -652,12 +668,16 @@ CREATE TABLE public.orders (
       const res = await fetch("/api/orders");
       if (!res.ok) throw new Error("Status " + res.status);
       const data = await res.json();
-      setOrders(data || []);
-      localStorage.setItem("plantadda_orders", JSON.stringify(data || []));
+      if (Array.isArray(data) && data.length > 0) {
+        setOrders(data);
+        localStorage.setItem("plantadda_orders", JSON.stringify(data));
+      } else {
+        throw new Error("Empty orders list from API");
+      }
     } catch (e) {
       console.warn("Using offline fallback for orders", e);
       const saved = localStorage.getItem("plantadda_orders");
-      if (saved) {
+      if (saved && Array.isArray(JSON.parse(saved)) && JSON.parse(saved).length > 0) {
         setOrders(JSON.parse(saved));
       } else {
         await loadInitialStaticData();
@@ -2897,6 +2917,21 @@ CREATE TABLE public.orders (
                         >
                           ⚡ Access Workstation
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVendorLoginPassword("12345");
+                            setTimeout(() => {
+                              setActiveSession({ role: "vendor", data: selectedVendorForLogin });
+                              addNotification(`Welcome back to your workstation, ${selectedVendorForLogin.nurseryName}!`, "success");
+                              setShowLoginModal(false);
+                            }, 50);
+                          }}
+                          className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-xl text-center cursor-pointer text-xs"
+                        >
+                          ✨ One-Click Vendor Auto-Login
+                        </button>
                       </form>
                     )
                   ) : (
@@ -3022,6 +3057,22 @@ CREATE TABLE public.orders (
                     className="w-full bg-emerald-800 hover:bg-emerald-950 text-white font-bold py-2.5 rounded-xl cursor-pointer"
                   >
                     🚀 Authenticate & Unlock Dashboard
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setAdminUsername("admin");
+                      setAdminPassword("admin123");
+                      setTimeout(() => {
+                        setActiveSession({ role: "admin", data: { name: "System Administrator" } });
+                        addNotification("Welcome back to your dashboard, Administrator!", "success");
+                        setShowLoginModal(false);
+                      }, 50);
+                    }}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-xl text-center cursor-pointer text-xs"
+                  >
+                    ✨ One-Click Admin Auto-Login
                   </button>
                 </form>
               )}
