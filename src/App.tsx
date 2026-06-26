@@ -1849,7 +1849,7 @@ CREATE TABLE public.orders (
               </div>
 
               {/* Status Warning & Explanation */}
-              {(!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) && (
+              {(!(typeof process !== "undefined" && process.env?.SUPABASE_URL) || !(typeof process !== "undefined" && process.env?.SUPABASE_ANON_KEY)) && (
                 <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3.5 rounded-xl text-xs flex gap-2.5 items-start">
                   <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                   <div>
