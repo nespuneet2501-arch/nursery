@@ -29,19 +29,13 @@ import {
 import { Category, Plant, Vendor, Order, DeliverySettings, UserSession, Customer } from "./types";
 import { translations } from "./translations";
 import { PlantAddaLogo } from "./components/PlantAddaLogo";
-import dbData from "../db.json";
-
-const initialPlants = (dbData as any).plants || [];
-const initialVendors = (dbData as any).vendors || [];
-const initialCustomers = (dbData as any).customers || [];
-const initialOrders = (dbData as any).orders || [];
-const initialSettings = (dbData as any).delivery_settings || {
+const initialSettings = {
   id: "settings",
   freeDeliveryThreshold: 499,
   standardDeliveryCharge: 49,
   baseCommissionPercent: 12
 };
-const initialPromo = (dbData as any).promotional_banner || {
+const initialPromo = {
   imageUrl: "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=1200&q=80",
   title: "🌱 Monsoon Special Sale: Flat 20% OFF on all Green Air Purifiers!",
   isActive: true,
@@ -72,7 +66,7 @@ export default function App() {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
-    return initialPlants;
+    return [];
   });
 
   const [vendors, setVendors] = useState<Vendor[]>(() => {
@@ -83,7 +77,7 @@ export default function App() {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
-    return initialVendors;
+    return [];
   });
 
   const [customers, setCustomers] = useState<Customer[]>(() => {
@@ -94,7 +88,7 @@ export default function App() {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
-    return initialCustomers;
+    return [];
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
@@ -105,7 +99,7 @@ export default function App() {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
-    return initialOrders;
+    return [];
   });
 
   const [deliverySettings, setDeliverySettings] = useState<DeliverySettings>(() => {
@@ -246,7 +240,7 @@ export default function App() {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
-    return (dbData as any).database_connections || [];
+    return [];
   });
   const [dbSyncing, setDbSyncing] = useState(false);
   const [dbConsoleOutput, setDbConsoleOutput] = useState("");
