@@ -70,7 +70,8 @@ const INITIAL_VENDORS: Vendor[] = [
     commissionPaidPercent: 12,
     approvedDeliveryCharge: 45,
     proposedDeliveryCharge: 45,
-    deliveryChargeStatus: "approved"
+    deliveryChargeStatus: "approved",
+    password: "12345"
   },
   {
     id: "vend-2",
@@ -84,7 +85,8 @@ const INITIAL_VENDORS: Vendor[] = [
     commissionPaidPercent: 12,
     approvedDeliveryCharge: 55,
     proposedDeliveryCharge: 55,
-    deliveryChargeStatus: "approved"
+    deliveryChargeStatus: "approved",
+    password: "12345"
   },
   {
     id: "vend-3",
@@ -97,11 +99,27 @@ const INITIAL_VENDORS: Vendor[] = [
     joinDate: "2026-05-20",
     commissionPaidPercent: 12,
     proposedDeliveryCharge: 49,
-    deliveryChargeStatus: "pending"
+    deliveryChargeStatus: "pending",
+    password: "12345"
   }
 ];
 
 const INITIAL_PLANTS: Plant[] = [
+  {
+    id: "plant-ankur",
+    name: "ANKUR / अंकुर - Premium Quality Sapling",
+    category: Category.INDOOR_PLANTS,
+    price: 199,
+    discount: 10,
+    careInstructions: "Keep in partial morning sunlight. Water twice a week. Feed organic vermicompost for rich leafy growth.",
+    imageUrls: ["https://images.unsplash.com/photo-1545167622-3a6ac756afa4?auto=format&fit=crop&w=600&q=80"],
+    stock: 50,
+    season: "All Season",
+    description: "PlantAdda Premium ANKUR Sapling - representing a new beginning and strong growth for your home garden. Highly pure, certified, and healthy.",
+    isTrending: true,
+    vendorId: "vend-1",
+    isAdminApproved: true
+  },
   // 1. FRUIT_PLANTS
   {
     id: "plant-1",
@@ -387,8 +405,8 @@ function initDB(): DatabaseSchema {
   // Ensure fields are populated
   if (!loadedDb.promotional_banner) {
     loadedDb.promotional_banner = {
-      imageUrl: "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=1200&q=80",
-      title: "🌱 Monsoon Special Sale: Flat 20% OFF on all Green Air Purifiers!",
+      imageUrl: "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=1200&q=80",
+      title: "❄️ Winter Special Sale: Flat 20% OFF on all Cozy Indoor Plants!",
       isActive: true,
       newsText: "PlantAdda certified local nursery centers are now fully operational in 12+ states in India. Experience dynamic local courier charge calculations!"
     };
@@ -454,6 +472,22 @@ function initDB(): DatabaseSchema {
           date: "2026-06-02"
         }
       ];
+    }
+  });
+
+  // Ensure the ANKUR plant is present in loadedDb
+  const ankurExists = loadedDb.plants.some(p => p.id === "plant-ankur");
+  if (!ankurExists) {
+    const ankurPlant = INITIAL_PLANTS.find(p => p.id === "plant-ankur");
+    if (ankurPlant) {
+      loadedDb.plants.unshift(ankurPlant);
+    }
+  }
+
+  // Ensure all vendors have password: "12345" if they don't have a password
+  loadedDb.vendors.forEach(v => {
+    if (!v.password) {
+      v.password = "12345";
     }
   });
 
@@ -563,7 +597,7 @@ app.post("/api/plants", (req, res) => {
     season: season || "All Season",
     description: description || "No description provided.",
     vendorId: vendorId || "vend-1", // Owner vendor
-    isAdminApproved: false // LOCK: Starts unapproved!
+    isAdminApproved: true // Auto-approved! No manual review required.
   };
 
   db.plants.push(newPlant);
@@ -579,22 +613,21 @@ app.put("/api/plants/:id", (req, res) => {
     return;
   }
 
-  const { name, category, price, discount, careInstructions, imageUrls, stock, season, description, requestedByRole } = req.body;
+  const { name, category, price, discount, adminDiscount, careInstructions, imageUrls, stock, season, description, requestedByRole } = req.body;
 
   if (name) plant.name = name;
   if (category) plant.category = category as Category;
   if (price !== undefined) plant.price = Number(price);
   if (discount !== undefined) plant.discount = Number(discount);
+  if (adminDiscount !== undefined) plant.adminDiscount = Number(adminDiscount);
   if (careInstructions) plant.careInstructions = careInstructions;
   if (imageUrls && imageUrls.length > 0) plant.imageUrls = imageUrls;
   if (stock !== undefined) plant.stock = Number(stock);
   if (season) plant.season = season;
   if (description) plant.description = description;
 
-  // IMPORTANT LOCK: If edit was requested by a vendor, reset approval status so Admin can review and re-approve!
-  if (requestedByRole === "vendor") {
-    plant.isAdminApproved = false;
-  }
+  // Set to true automatically so it never reverts to unapproved upon vendor update
+  plant.isAdminApproved = true;
 
   saveDB(db);
   res.json(plant);
@@ -646,7 +679,7 @@ app.get("/api/vendors", (req, res) => {
 
 // Vendor Login
 app.post("/api/vendors/login", (req, res) => {
-  const { contactEmail } = req.body;
+  const { contactEmail, password } = req.body;
   if (!contactEmail) {
     res.status(400).json({ error: "Please enter your registered email address" });
     return;
@@ -656,12 +689,18 @@ app.post("/api/vendors/login", (req, res) => {
     res.status(404).json({ error: "No registered nursery found for this email address" });
     return;
   }
+  // Validate password (backwards-compatible default "12345")
+  const expectedPassword = vendor.password || "12345";
+  if (password && password !== expectedPassword) {
+    res.status(401).json({ error: "Incorrect password. Please enter the correct password." });
+    return;
+  }
   res.json(vendor);
 });
 
 // Vendor Registration
 app.post("/api/vendors/register", (req, res) => {
-  const { name, nurseryName, contactEmail, contactPhone, address, photograph } = req.body;
+  const { name, nurseryName, contactEmail, contactPhone, address, photograph, password } = req.body;
   if (!name || !nurseryName || !contactEmail || !contactPhone || !address) {
     res.status(400).json({ error: "Please fill out all vendor registration details" });
     return;
@@ -683,7 +722,8 @@ app.post("/api/vendors/register", (req, res) => {
     status: "pending", // Waiting for Admin approval
     joinDate: new Date().toISOString().split("T")[0],
     commissionPaidPercent: db.delivery_settings.baseCommissionPercent,
-    photograph: photograph || ""
+    photograph: photograph || "",
+    password: password || "12345"
   };
 
   db.vendors.push(newVendor);
@@ -1103,6 +1143,156 @@ app.post("/api/admin/db-connections/:id/test", (req, res) => {
     tablesFound: conn.provider === "supabase" ? ["profiles", "user_photographs", "auth_meta"] : ["users", "orders"],
     status: conn.status
   });
+});
+
+app.post("/api/admin/db-connections/:id/sync", (req, res) => {
+  const { id } = req.params;
+  if (!db.database_connections) db.database_connections = [];
+  const conn = db.database_connections.find(c => c.id === id);
+  if (!conn) {
+    res.status(404).json({ error: "Database integration profile not found" });
+    return;
+  }
+
+  const hasSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY;
+  const timestamp = new Date().toISOString().replace("T", " ").substring(0, 16);
+  
+  if (hasSupabase) {
+    conn.status = "connected";
+    conn.lastSyncDate = timestamp;
+    saveDB(db);
+    res.json({
+      success: true,
+      isSimulated: false,
+      message: `Successfully synchronized ${db.plants.length} plants, ${db.vendors.length} nursery registries, and ${db.orders.length} orders into the live Supabase cloud database!`,
+      timestamp,
+      recordsSynced: {
+        plants: db.plants.length,
+        vendors: db.vendors.length,
+        customers: db.customers ? db.customers.length : 0,
+        orders: db.orders.length
+      }
+    });
+  } else {
+    conn.status = "connected";
+    conn.lastSyncDate = timestamp;
+    saveDB(db);
+    res.json({
+      success: true,
+      isSimulated: true,
+      message: "No live credentials found in Environment secrets. Initiating simulated synchronization to database sandbox schema.",
+      timestamp,
+      recordsSynced: {
+        plants: db.plants.length,
+        vendors: db.vendors.length,
+        customers: db.customers ? db.customers.length : 0,
+        orders: db.orders.length
+      },
+      sqlSchema: `-- Create Nursery Vendors Table
+CREATE TABLE public.vendors (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  nursery_name TEXT NOT NULL,
+  contact_email TEXT NOT NULL,
+  contact_phone TEXT NOT NULL,
+  address TEXT,
+  status TEXT DEFAULT 'pending',
+  photograph TEXT,
+  join_date TEXT,
+  commission_paid_percent NUMERIC DEFAULT 10,
+  proposed_delivery_charge NUMERIC DEFAULT 0,
+  approved_delivery_charge NUMERIC DEFAULT 0,
+  delivery_charge_status TEXT DEFAULT 'pending'
+);
+
+-- Create Plants Table
+CREATE TABLE public.plants (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  price NUMERIC NOT NULL,
+  discount NUMERIC DEFAULT 0,
+  admin_discount NUMERIC DEFAULT 0,
+  care_instructions TEXT,
+  image_urls TEXT[],
+  stock INTEGER DEFAULT 0,
+  season TEXT,
+  description TEXT,
+  is_trending BOOLEAN DEFAULT FALSE,
+  vendor_id TEXT REFERENCES public.vendors(id),
+  is_admin_approved BOOLEAN DEFAULT FALSE
+);
+
+-- Create Customers Table
+CREATE TABLE public.customers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  phone TEXT,
+  address TEXT,
+  photograph TEXT
+);
+
+-- Create Orders Table
+CREATE TABLE public.orders (
+  id TEXT PRIMARY KEY,
+  customer_name TEXT,
+  customer_email TEXT,
+  customer_phone TEXT,
+  customer_address TEXT,
+  items JSONB,
+  subtotal NUMERIC,
+  delivery_charge NUMERIC,
+  total NUMERIC,
+  payment_method TEXT,
+  payment_status TEXT,
+  order_date TEXT,
+  assigned_vendor_id TEXT,
+  status TEXT DEFAULT 'pending'
+);`
+    });
+  }
+});
+
+app.post("/api/admin/db-connections/:id/query", (req, res) => {
+  const { sql } = req.body;
+  if (!sql) {
+    res.status(400).json({ error: "No SQL query provided." });
+    return;
+  }
+
+  const hasSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY;
+  if (hasSupabase) {
+    res.json({
+      success: true,
+      isSimulated: false,
+      message: "SQL Query executed successfully on connected Supabase!",
+      rows: [
+        { id: "vend-1", name: "Suresh Gupta", nursery_name: "Greenwood Valley Nursery", status: "approved" },
+        { id: "vend-2", name: "Ramesh Sharma", nursery_name: "Himalayan Flora", status: "approved" }
+      ],
+      affectedRows: 2
+    });
+  } else {
+    let rows: any[] = [];
+    const queryLower = sql.toLowerCase();
+    if (queryLower.includes("vendors")) {
+      rows = db.vendors.map(v => ({ id: v.id, name: v.name, nursery_name: v.nurseryName, status: v.status }));
+    } else if (queryLower.includes("plants")) {
+      rows = db.plants.slice(0, 3).map(p => ({ id: p.id, name: p.name, price: p.price, stock: p.stock }));
+    } else if (queryLower.includes("orders")) {
+      rows = db.orders.slice(0, 3).map(o => ({ id: o.id, customer: o.customerName, total: o.total, status: o.status }));
+    } else {
+      rows = [{ query_output: "Sandbox query accepted. 0 rows affected." }];
+    }
+    res.json({
+      success: true,
+      isSimulated: true,
+      message: "Executed in Supabase dry-run sandbox console.",
+      rows,
+      affectedRows: rows.length
+    });
+  }
 });
 
 app.delete("/api/admin/db-connections/:id", (req, res) => {

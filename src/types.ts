@@ -32,6 +32,7 @@ export interface Plant {
   isTrending?: boolean;
   vendorId: string; // The supplying vendor
   isAdminApproved?: boolean; // Admin visibility control
+  adminDiscount?: number; // Additional discount set by Admin
   reviews?: Review[];
 }
 
@@ -49,6 +50,7 @@ export interface Vendor {
   deliveryChargeStatus?: "pending" | "approved" | "rejected"; 
   approvedDeliveryCharge?: number; // Active/approved or overridden delivery charge
   photograph?: string; // base64 or link
+  password?: string;
 }
 
 export interface Customer {
