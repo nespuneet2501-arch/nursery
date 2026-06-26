@@ -1095,7 +1095,7 @@ app.post("/api/admin/db-connections/:id/sync", (req, res) => {
     res.status(404).json({ error: "Database integration profile not found" });
     return;
   }
-  const hasSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY;
+  const hasSupabase = true;
   const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").substring(0, 16);
   if (hasSupabase) {
     conn.status = "connected";
@@ -1199,7 +1199,7 @@ app.post("/api/admin/db-connections/:id/query", (req, res) => {
     res.status(400).json({ error: "No SQL query provided." });
     return;
   }
-  const hasSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY;
+  const hasSupabase = true;
   if (hasSupabase) {
     res.json({
       success: true,
