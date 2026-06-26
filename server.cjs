@@ -389,8 +389,94 @@ function initDB() {
       delivery_settings: INITIAL_DELIVERY_SETTINGS
     };
   }
-  if (!loadedDb.customers) {
-    loadedDb.customers = [];
+  if (!loadedDb.customers || loadedDb.customers.length === 0) {
+    loadedDb.customers = [
+      {
+        id: "cust-1",
+        name: "Arjun Mehta",
+        email: "arjun.mehta@gmail.com",
+        phone: "+91 98123 45678",
+        address: "Flat 402, Sea Breeze Apartments, Bandra West, Mumbai, Maharashtra",
+        photograph: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=300&q=80",
+        joinDate: "2026-06-01"
+      },
+      {
+        id: "cust-2",
+        name: "Priya Patel",
+        email: "priya_patel_plants@outlook.com",
+        phone: "+91 87654 12345",
+        address: "12th Cross, Indiranagar, Bengaluru, Karnataka",
+        photograph: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80",
+        joinDate: "2026-06-02"
+      },
+      {
+        id: "cust-3",
+        name: "Suresh Gupta",
+        email: "suresh.customer@gmail.com",
+        phone: "+91 76543 98765",
+        address: "House 89, Sector 45, Gurugram, Haryana",
+        photograph: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80",
+        joinDate: "2026-06-03"
+      }
+    ];
+    saveDB(loadedDb);
+  }
+  if (!loadedDb.orders || loadedDb.orders.length === 0) {
+    loadedDb.orders = [
+      {
+        id: "ord-88392",
+        customerName: "Arjun Mehta",
+        customerEmail: "arjun.mehta@gmail.com",
+        customerPhone: "+91 98123 45678",
+        customerAddress: "Flat 402, Sea Breeze Apartments, Bandra West, Mumbai, Maharashtra",
+        items: [
+          {
+            plantId: "plant-1",
+            name: "Areca Palm Air Purifier",
+            price: 349,
+            discount: 10,
+            quantity: 1,
+            imageUrl: "https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=400&q=80",
+            vendorId: "vend-1"
+          }
+        ],
+        subtotal: 314,
+        deliveryCharge: 49,
+        total: 363,
+        status: "delivered",
+        orderDate: "2026-06-15",
+        assignedVendorId: "vend-1",
+        paymentMethod: "UPI_GPAY",
+        paymentStatus: "paid"
+      },
+      {
+        id: "ord-88395",
+        customerName: "Priya Patel",
+        customerEmail: "priya_patel_plants@outlook.com",
+        customerPhone: "+91 87654 12345",
+        customerAddress: "12th Cross, Indiranagar, Bengaluru, Karnataka",
+        items: [
+          {
+            plantId: "plant-2",
+            name: "Bonsai Ficus Microcarpa",
+            price: 899,
+            discount: 15,
+            quantity: 1,
+            imageUrl: "https://images.unsplash.com/photo-1512428559087-560fa5ceab42?auto=format&fit=crop&w=400&q=80",
+            vendorId: "vend-2"
+          }
+        ],
+        subtotal: 764,
+        deliveryCharge: 0,
+        total: 764,
+        status: "assigned",
+        orderDate: "2026-06-25",
+        assignedVendorId: "vend-2",
+        paymentMethod: "UPI_PHONEPE",
+        paymentStatus: "paid"
+      }
+    ];
+    saveDB(loadedDb);
   }
   if (!loadedDb.promotional_banner) {
     loadedDb.promotional_banner = {
